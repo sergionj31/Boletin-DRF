@@ -1,26 +1,40 @@
-from django.shortcuts import render
-from rest_framework import viewsets
-from .models import Marca, vehiculo
-from .serializers import MarcaSerializer, VehiculoSerializer
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import OpenApiParameter, extend_schema
+
+from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from rest_framework.permissions import IsAuthenticated
-from django.core.exceptions import ObjectDoesNotExist
-from rest_framework import status
+
+from .models import Marca, vehiculo
+from .serializers import MarcaSerializer, VehiculoSerializer
+
+# Create your views here.
+
 
 class MarcaViewSet(viewsets.ModelViewSet):
     queryset = Marca.objects.all()
     serializer_class = MarcaSerializer
     authentication_classes = [SessionAuthentication, BasicAuthentication]
     permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+
 
 class VehiculoViewSet(viewsets.ModelViewSet):
-    queryset = vehiculo.objects.all().order_by('Fecha_Matriculacion')
+    queryset = vehiculo.objects.all()
     serializer_class = VehiculoSerializer
     authentication_classes = [SessionAuthentication, BasicAuthentication]
     permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['Marca', 'Modelo', 'Color']
+    ordering_fields = ['Fecha_Fabricacion']
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='Nombre', description="Nombre de la marca", required=True, type=str)
+        ]
+    )
     @action(detail=False, methods=['GET'])
     def vehiculos_por_marca(self, request):
         nombre_marca = request.query_params.get('Nombre', None)
@@ -46,6 +60,14 @@ class VehiculoViewSet(viewsets.ModelViewSet):
         serializer = VehiculoSerializer(vehiculos_ordenados, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='Marca', description="Nombre de la marca", required=True, type=str),
+            OpenApiParameter(name='Modelo', description="Nombre del modelo", required=False, type=str),
+            OpenApiParameter(name='Color', description="Color del vehículo", required=False, type=str),
+        ],
+        responses={200: VehiculoSerializer(many=True)}
+    )
     @action(detail=False, methods=['GET'])
     def vehiculos_filtrados(self, request):
         nombre_marca = request.query_params.get('Marca', None)
